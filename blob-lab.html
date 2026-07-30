@@ -1,0 +1,1021 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Blob Lab</title>
+<style>
+  :root{
+    --panel:#14171d;
+    --panel-2:#1b1f27;
+    --ink:#e8eaf0;
+    --ink-dim:#8b93a5;
+    --line:#262b36;
+    --accent:#7ec8ff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:#0c0e12;
+    color:var(--ink);
+    font-family:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    display:flex;
+    flex-direction:row;
+    overflow:hidden;
+    -webkit-user-select:none;user-select:none;
+  }
+  #stage{
+    flex:1;
+    position:relative;
+    min-width:0;
+    touch-action:none;
+  }
+  #stage.checker{
+    background:
+      repeating-conic-gradient(#23262e 0% 25%, #16181e 0% 50%) 0 0 / 22px 22px;
+  }
+  #view{
+    position:absolute;inset:0;width:100%;height:100%;
+    display:block;
+    cursor:grab;
+  }
+  #view.dragging{cursor:grabbing}
+  #hint{
+    position:absolute;left:14px;bottom:12px;
+    font-size:11px;letter-spacing:.04em;color:rgba(255,255,255,.38);
+    pointer-events:none;
+    transition:opacity .8s;
+  }
+  #panel{
+    width:288px;flex-shrink:0;
+    background:var(--panel);
+    border-left:1px solid var(--line);
+    overflow-y:auto;
+    padding:18px 18px 28px;
+  }
+  h1{
+    font-size:13px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+    margin-bottom:2px;
+  }
+  .sub{font-size:10.5px;color:var(--ink-dim);margin-bottom:18px;letter-spacing:.03em}
+  .group{margin-bottom:16px}
+  .group-title{
+    font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-dim);
+    border-bottom:1px solid var(--line);
+    padding-bottom:5px;margin-bottom:11px;
+  }
+  .row{margin-bottom:11px}
+  .row label{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-size:11px;color:var(--ink);margin-bottom:5px;letter-spacing:.02em;
+  }
+  .row label .val{color:var(--ink-dim);font-size:10.5px}
+  input[type=range]{
+    width:100%;height:22px;
+    appearance:none;-webkit-appearance:none;
+    background:transparent;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:3px;border-radius:2px;background:var(--line);
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:14px;height:14px;border-radius:50%;
+    background:var(--accent);
+    margin-top:-5.5px;
+    border:2px solid #0c0e12;
+  }
+  input[type=range]::-moz-range-track{height:3px;border-radius:2px;background:var(--line)}
+  input[type=range]::-moz-range-thumb{
+    width:11px;height:11px;border-radius:50%;background:var(--accent);border:2px solid #0c0e12;
+  }
+  .colors{display:flex;gap:8px}
+  .colorbox{flex:1;display:flex;flex-direction:column;gap:4px}
+  .colorbox span{font-size:10px;color:var(--ink-dim);letter-spacing:.03em}
+  input[type=color]{
+    width:100%;height:30px;border:1px solid var(--line);border-radius:6px;
+    background:var(--panel-2);padding:2px;cursor:pointer;
+  }
+  .seg{display:flex;gap:0;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{
+    flex:1;padding:7px 0;font:inherit;font-size:10.5px;letter-spacing:.03em;
+    background:var(--panel-2);color:var(--ink-dim);border:none;cursor:pointer;
+  }
+  .seg button+button{border-left:1px solid var(--line)}
+  .seg button.on{background:#2a3040;color:var(--ink)}
+  .btn{
+    width:100%;padding:9px 0;font:inherit;font-size:11px;letter-spacing:.06em;
+    background:var(--panel-2);color:var(--ink);border:1px solid var(--line);
+    border-radius:7px;cursor:pointer;
+  }
+  .btn:active{background:#242a36}
+  .btn.rec{background:#3a1520;border-color:#7a2438;color:#ff8fa5}
+  .btnrow{display:flex;gap:8px}
+  .btnrow .btn{flex:1}
+  @media (max-width:820px){
+    body{flex-direction:column}
+    #stage{flex:none;height:52vh}
+    #panel{width:100%;flex:1;border-left:none;border-top:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="view"></canvas>
+  <div id="hint">drag a blob &middot; flick to throw</div>
+</div>
+
+<div id="panel">
+  <h1>Blob Lab</h1>
+  <div class="sub">metaball field playground</div>
+
+  <div class="group">
+    <div class="group-title">Population</div>
+    <div class="row">
+      <label>Count <span class="val" id="v-count">6</span></label>
+      <input type="range" id="count" min="1" max="14" step="1" value="6">
+    </div>
+    <div class="row">
+      <label>Size <span class="val" id="v-size">50%</span></label>
+      <input type="range" id="size" min="0" max="100" step="1" value="50">
+    </div>
+    <div class="row">
+      <label>Size applies to</label>
+      <div class="seg" id="sizemode">
+        <button data-s="all" class="on">All</button>
+        <button data-s="each">Selected</button>
+      </div>
+      <div id="sel-hint" style="display:none;font-size:10px;color:var(--ink-dim);margin-top:6px;letter-spacing:.03em">tap a blob to select it, then use the size slider</div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Shape</div>
+    <div class="row">
+      <label>Morph <span class="val" id="v-shape">circle</span></label>
+      <input type="range" id="shape" min="0" max="100" step="1" value="0">
+    </div>
+    <div class="row">
+      <label>Points <span class="val" id="v-points">5</span></label>
+      <input type="range" id="points" min="3" max="9" step="1" value="5">
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Surface</div>
+    <div class="row">
+      <label>Edge <span class="val" id="v-soft">soft 30%</span></label>
+      <input type="range" id="soft" min="0" max="100" step="1" value="30">
+    </div>
+    <div class="row">
+      <label>Fill mode</label>
+      <div class="seg" id="mode">
+        <button data-m="solid">Solid</button>
+        <button data-m="glow" class="on">Glow</button>
+        <button data-m="sweep">Sweep</button>
+      </div>
+    </div>
+    <div class="row colors">
+      <div class="colorbox"><span>Core</span><input type="color" id="c-core" value="#ff5c8a"></div>
+      <div class="colorbox"><span>Edge</span><input type="color" id="c-edge" value="#5c9dff"></div>
+      <div class="colorbox"><span>Back</span><input type="color" id="c-bg" value="#0c0e12"></div>
+    </div>
+    <div class="row">
+      <label>Background</label>
+      <div class="seg" id="bgmode">
+        <button data-b="color" class="on">Color</button>
+        <button data-b="clear">Transparent</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Interaction</div>
+    <div class="row">
+      <label>Gooeyness <span class="val" id="v-goo">55%</span></label>
+      <input type="range" id="goo" min="0" max="100" step="1" value="55">
+    </div>
+    <div class="row">
+      <label>Attraction <span class="val" id="v-attract">45%</span></label>
+      <input type="range" id="attract" min="0" max="100" step="1" value="45">
+    </div>
+    <div class="row">
+      <label>Motion</label>
+      <div class="seg" id="motion">
+        <button data-f="live" class="on">Live</button>
+        <button data-f="frozen">Frozen</button>
+        <button data-f="loop">Loop</button>
+      </div>
+      <div id="loop-note" style="display:none;font-size:10px;color:var(--ink-dim);margin-top:6px;letter-spacing:.03em">periodic motion &middot; REC captures exactly one cycle &rarr; seamless loop</div>
+    </div>
+    <div class="row" id="loopdur-row" style="display:none">
+      <label>Loop length <span class="val" id="v-loopdur">10s</span></label>
+      <input type="range" id="loopdur" min="4" max="24" step="1" value="10">
+    </div>
+    <div class="row" id="paths-row" style="display:none">
+      <label>Paths</label>
+      <div class="seg" id="pathsmode">
+        <button data-p="show" class="on">Show</button>
+        <button data-p="hide">Hide</button>
+      </div>
+      <div style="font-size:10px;color:var(--ink-dim);margin-top:6px;letter-spacing:.03em">drag &#9632; to move an orbit &middot; drag &#9675; to resize it</div>
+    </div>
+    <div id="orbit-rows" style="display:none">
+      <div class="row">
+        <label>X cycles <span class="val" id="v-ofx">1</span></label>
+        <input type="range" id="ofx" min="1" max="4" step="1" value="1">
+      </div>
+      <div class="row">
+        <label>Y cycles <span class="val" id="v-ofy">1</span></label>
+        <input type="range" id="ofy" min="1" max="4" step="1" value="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="group">
+    <div class="group-title">Export</div>
+    <div class="btnrow">
+      <button class="btn" id="ex-png">PNG</button>
+      <button class="btn" id="ex-svg">SVG</button>
+      <button class="btn" id="ex-rec">REC</button>
+    </div>
+  </div>
+
+  <button class="btn" id="scatter">Scatter</button>
+</div>
+
+<script>
+(() => {
+  // ---------- state ----------
+  const P = {
+    count: 6,
+    size: 0.5,
+    shape: 0,        // 0 circle, .5 oval, 1 polygon
+    points: 5,
+    soft: 0.30,
+    goo: 0.55,
+    attract: 0.45,
+    mode: 'glow',
+    sizeMode: 'all',
+    frozen: false,
+    loop: false,
+    loopDur: 10,
+    showPaths: true,
+    transparent: false,
+    core: [255, 92, 138],
+    edge: [92, 157, 255],
+    bg:   [12, 14, 18],
+  };
+
+  const TAU = Math.PI * 2;
+
+  // ---------- canvases ----------
+  const view = document.getElementById('view');
+  const vctx = view.getContext('2d');
+  const stage = document.getElementById('stage');
+  const buf = document.createElement('canvas');
+  const bctx = buf.getContext('2d');
+  const FW = 264;                 // field buffer width (physics + render space)
+  let FH = 176, img = null;
+
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    view.width  = Math.max(2, Math.round(r.width  * devicePixelRatio));
+    view.height = Math.max(2, Math.round(r.height * devicePixelRatio));
+    const newFH = Math.max(40, Math.round(FW * r.height / Math.max(1, r.width)));
+    if (newFH !== FH || !img) {
+      const k = newFH / FH;
+      for (const b of blobs) { b.y *= k; if (b.cy !== undefined) b.cy *= k; }
+      FH = newFH;
+      buf.width = FW; buf.height = FH;
+      img = bctx.createImageData(FW, FH);
+    }
+  }
+
+  // ---------- blobs ----------
+  const blobs = [];
+  let selI = -1;   // selected blob (Selected size mode)
+  function makeBlob() {
+    return {
+      x: FW * (0.15 + 0.7 * Math.random()),
+      y: FH * (0.15 + 0.7 * Math.random()),
+      vx: (Math.random() - 0.5) * 0.6,
+      vy: (Math.random() - 0.5) * 0.6,
+      rv: 1,   // uniform base size; per-blob differences come from user edits
+      scale: 1,
+      rot: Math.random() * Math.PI * 2,
+      rotV: (Math.random() - 0.5) * 0.006,
+      ph: Math.random() * Math.PI * 2,
+      wf1: 0.5 + Math.random() * 0.9,
+      wf2: 0.5 + Math.random() * 0.9,
+    };
+  }
+  function syncCount() {
+    while (blobs.length < P.count) blobs.push(makeBlob());
+    while (blobs.length > P.count) blobs.pop();
+    if (selI >= blobs.length) { selI = -1; if (typeof syncSizeSlider === 'function') syncSizeSlider(); }
+  }
+  function scatter() {
+    for (const b of blobs) {
+      b.x = FW * (0.12 + 0.76 * Math.random());
+      b.y = FH * (0.12 + 0.76 * Math.random());
+      b.vx = (Math.random() - 0.5) * 2.2;
+      b.vy = (Math.random() - 0.5) * 2.2;
+    }
+  }
+  syncCount();
+  resize();
+
+  const baseR = () => 11 + P.size * 30;   // buffer px
+  const blobR = (b) => baseR() * b.rv * b.scale;  // effective radius
+
+  // ---------- shared shape / field math ----------
+  function shapeParams() {
+    const s = P.shape;
+    const ovalA = Math.min(s * 2, 1) * 0.5;
+    const polyA = Math.max(0, s * 2 - 1) * 0.34;
+    return {
+      sx: 1 + ovalA,
+      sy: 1 / (1 + ovalA * 0.85),
+      polyA,
+      kPts: P.points,
+      halfP: 1.05 + (1 - P.goo) * 2.1,
+      reach: baseR() * 1.9 * (1 + P.goo * 1.4),
+    };
+  }
+  function precompute(shp) {
+    const R0 = baseR(), n = blobs.length;
+    const pre = { n, bx:[], by:[], bR2:[], bcos:[], bsin:[], brch:[] };
+    for (let i = 0; i < n; i++) {
+      const b = blobs[i];
+      pre.bx[i] = b.x; pre.by[i] = b.y;
+      const R = R0 * b.rv * b.scale;
+      pre.bR2[i] = R * R;
+      pre.bcos[i] = Math.cos(b.rot); pre.bsin[i] = Math.sin(b.rot);
+      pre.brch[i] = shp.reach * b.rv * b.scale * (shp.sx > 1 ? shp.sx : 1) * (1 + shp.polyA);
+    }
+    return pre;
+  }
+  // field value at a point in buffer space
+  function fieldAt(x, y, pre, shp) {
+    let f = 0;
+    for (let i = 0; i < pre.n; i++) {
+      let dx = x - pre.bx[i], dy = y - pre.by[i];
+      const rc = pre.brch[i];
+      if (dx > rc || dx < -rc || dy > rc || dy < -rc) continue;
+      const rx =  dx * pre.bcos[i] + dy * pre.bsin[i];
+      const ry = -dx * pre.bsin[i] + dy * pre.bcos[i];
+      const ox = rx / shp.sx, oy = ry / shp.sy;
+      let d2 = ox * ox + oy * oy;
+      if (d2 < 0.001) d2 = 0.001;
+      if (shp.polyA > 0.001) {
+        const th = Math.atan2(oy, ox);
+        const mod = 1 + shp.polyA * Math.cos(shp.kPts * th);
+        d2 /= mod * mod;
+      }
+      f += Math.pow(pre.bR2[i] / d2, shp.halfP);
+    }
+    return f;
+  }
+  function glowMix(f, out) {
+    let g = (f - 1) * 0.45; if (g < 0) g = 0; if (g > 1) g = 1;
+    g = Math.sqrt(g);
+    const [cr, cg, cb] = P.core, [er, eg, eb] = P.edge;
+    out[0] = er + (cr - er) * g;
+    out[1] = eg + (cg - eg) * g;
+    out[2] = eb + (cb - eb) * g;
+  }
+
+  // ---------- physics ----------
+  let dragI = -1, dragPX = 0, dragPY = 0, t = 0;
+  let dragH = null;   // {i, mode:'center'|'corner'} while dragging an orbit handle
+
+  // closed-form periodic orbits: every term completes integer cycles per
+  // loop, so frame(t) === frame(t + loopDur) exactly
+  function initOrbit(b) {
+    b.cx = Math.min(Math.max(b.x, FW * 0.18), FW * 0.82);
+    b.cy = Math.min(Math.max(b.y, FH * 0.18), FH * 0.82);
+    const base = Math.min(FW, FH);
+    b.oax = base * (0.08 + Math.random() * 0.20);
+    b.oay = base * (0.08 + Math.random() * 0.20);
+    b.ofx = 1 + Math.floor(Math.random() * 3);   // integer cycles per loop
+    b.ofy = 1 + Math.floor(Math.random() * 3);
+    b.opx = Math.random() * TAU;
+    b.opy = Math.random() * TAU;
+    b.rot0 = b.rot;
+    b.oturns = [-1, 0, 0, 1][Math.floor(Math.random() * 4)];
+  }
+
+  const orbitAmpK = () => 0.4 + P.attract * 1.2;   // attraction slider = orbit reach
+
+  function loopStep() {
+    const tau = (t % P.loopDur) / P.loopDur;
+    const ampK = orbitAmpK();
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      if (b.cx === undefined) initOrbit(b);
+      const ox = b.oax * ampK * Math.sin(TAU * b.ofx * tau + b.opx);
+      const oy = b.oay * ampK * Math.sin(TAU * b.ofy * tau + b.opy);
+      if (i === dragI) {
+        b.cx = b.x - ox; b.cy = b.y - oy;        // dragging repositions the orbit center
+      } else {
+        b.x = b.cx + ox; b.y = b.cy + oy;
+      }
+      b.rot = b.rot0 + b.oturns * TAU * tau;     // whole turns only -> loops clean
+    }
+  }
+
+  function step() {
+    if (P.frozen) return;
+    t += 1 / 60;
+    if (P.loop) { loopStep(); return; }
+    const R0 = baseR();
+    const n = blobs.length;
+
+    const k = P.attract;
+    for (let i = 0; i < n; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = blobs[i], b = blobs[j];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy) || 0.001;
+        const Ri = R0 * a.rv * a.scale, Rj = R0 * b.rv * b.scale;
+        dx /= d; dy /= d;
+
+        // attraction within range
+        if (k > 0.001) {
+          const range = (Ri + Rj) * (1.1 + k * 2.6);
+          if (d < range) {
+            const f = k * 0.055 * (1 - d / range);
+            if (i !== dragI) { a.vx += dx * f; a.vy += dy * f; }
+            if (j !== dragI) { b.vx -= dx * f; b.vy -= dy * f; }
+          }
+        }
+
+        // short-range separation: surfaces merge, centers never fully stack
+        const minD = (Ri + Rj) * 0.62;
+        if (d < minD) {
+          const f = 0.10 * (1 - d / minD);
+          if (i !== dragI) { a.vx -= dx * f; a.vy -= dy * f; }
+          if (j !== dragI) { b.vx += dx * f; b.vy += dy * f; }
+        }
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      const b = blobs[i];
+      b.rot += b.rotV;
+      if (i === dragI) continue;
+
+      b.vx += Math.sin(t * b.wf1 + b.ph) * 0.009 + (Math.random() - 0.5) * 0.02;
+      b.vy += Math.cos(t * b.wf2 + b.ph * 1.7) * 0.009 + (Math.random() - 0.5) * 0.02;
+
+      const m = R0 * b.rv * b.scale * 0.55, W = 0.02;
+      if (b.x < m)      b.vx += (m - b.x) * W;
+      if (b.x > FW - m) b.vx -= (b.x - (FW - m)) * W;
+      if (b.y < m)      b.vy += (m - b.y) * W;
+      if (b.y > FH - m) b.vy -= (b.y - (FH - m)) * W;
+
+      b.vx *= 0.965; b.vy *= 0.965;
+      const sp = Math.hypot(b.vx, b.vy);
+      if (sp > 2.6) { b.vx *= 2.6 / sp; b.vy *= 2.6 / sp; }
+      b.x += b.vx; b.y += b.vy;
+    }
+  }
+
+  // ---------- field render (shared by live view + PNG export) ----------
+  function renderField(data, W, H, transparent) {
+    const shp = shapeParams();
+    const pre = precompute(shp);
+    const n = pre.n;
+    const { sx, sy, polyA, kPts, halfP } = shp;
+    const { bx, by, bR2, bcos, bsin, brch } = pre;
+
+    const band = 0.035 + P.soft * 0.85;
+    const lo = 1 - band, inv = 1 / (2 * band);
+
+    const [cr, cg, cb] = P.core, [er, eg, eb] = P.edge, [br, bgc, bb] = P.bg;
+    const mode = P.mode;
+    const scX = FW / W, scY = FH / H;
+
+    let p = 0;
+    for (let y = 0; y < H; y++) {
+      const fy = y * scY;
+      const sweepT = y / H;
+      for (let x = 0; x < W; x++, p += 4) {
+        const fx = x * scX;
+        let f = 0;
+        for (let i = 0; i < n; i++) {
+          let dx = fx - bx[i], dy = fy - by[i];
+          const rc = brch[i];
+          if (dx > rc || dx < -rc || dy > rc || dy < -rc) continue;
+          const rx =  dx * bcos[i] + dy * bsin[i];
+          const ry = -dx * bsin[i] + dy * bcos[i];
+          const ox = rx / sx, oy = ry / sy;
+          let d2 = ox * ox + oy * oy;
+          if (d2 < 0.001) d2 = 0.001;
+          if (polyA > 0.001) {
+            const th = Math.atan2(oy, ox);
+            const mod = 1 + polyA * Math.cos(kPts * th);
+            d2 /= mod * mod;
+          }
+          f += Math.pow(bR2[i] / d2, halfP);
+        }
+
+        let a = (f - lo) * inv;
+        if (a <= 0) {
+          if (transparent) { data[p+3] = 0; }
+          else { data[p] = br; data[p+1] = bgc; data[p+2] = bb; data[p+3] = 255; }
+          continue;
+        }
+        if (a > 1) a = 1;
+        a = a * a * (3 - 2 * a);
+
+        let rr, gg, bl;
+        if (mode === 'solid') {
+          rr = cr; gg = cg; bl = cb;
+        } else if (mode === 'glow') {
+          let g = (f - 1) * 0.45; if (g < 0) g = 0; if (g > 1) g = 1;
+          g = Math.sqrt(g);
+          rr = er + (cr - er) * g;
+          gg = eg + (cg - eg) * g;
+          bl = eb + (cb - eb) * g;
+        } else {
+          rr = cr + (er - cr) * sweepT;
+          gg = cg + (eg - cg) * sweepT;
+          bl = cb + (eb - cb) * sweepT;
+        }
+
+        if (transparent) {
+          data[p] = rr; data[p+1] = gg; data[p+2] = bl; data[p+3] = a * 255;
+        } else {
+          data[p]   = br  + (rr - br)  * a;
+          data[p+1] = bgc + (gg - bgc) * a;
+          data[p+2] = bb  + (bl - bb)  * a;
+          data[p+3] = 255;
+        }
+      }
+    }
+  }
+
+  function render() {
+    renderField(img.data, FW, FH, P.transparent);
+    bctx.putImageData(img, 0, 0);
+    vctx.clearRect(0, 0, view.width, view.height);
+    vctx.imageSmoothingEnabled = true;
+    vctx.imageSmoothingQuality = 'high';
+    vctx.drawImage(buf, 0, 0, view.width, view.height);
+    if (P.loop && P.showPaths) {
+      const kx = view.width / FW, ky = view.height / FH;
+      const ampK = orbitAmpK();
+      const N = 140;
+      vctx.save();
+      for (let i = 0; i < blobs.length; i++) {
+        const b = blobs[i];
+        if (b.cx === undefined) continue;
+        const sel = (i === selI);
+        vctx.strokeStyle = sel ? 'rgba(126,200,255,0.95)' : 'rgba(255,255,255,0.25)';
+        vctx.lineWidth = Math.max(1, view.width / 900) * (sel ? 1.7 : 1);
+        vctx.beginPath();
+        for (let q = 0; q <= N; q++) {
+          const tau = q / N;
+          const x = (b.cx + b.oax * ampK * Math.sin(TAU * b.ofx * tau + b.opx)) * kx;
+          const y = (b.cy + b.oay * ampK * Math.sin(TAU * b.ofy * tau + b.opy)) * ky;
+          if (q) vctx.lineTo(x, y); else vctx.moveTo(x, y);
+        }
+        vctx.stroke();
+        // center handle (square) + extent handle (circle at +x/+y corner)
+        const hs = Math.max(5, view.width / 200);
+        const col = sel ? 'rgba(126,200,255,0.95)' : 'rgba(255,255,255,0.6)';
+        vctx.fillStyle = col;
+        vctx.fillRect(b.cx * kx - hs / 2, b.cy * ky - hs / 2, hs, hs);
+        vctx.strokeStyle = col;
+        vctx.lineWidth = Math.max(1.2, view.width / 900);
+        vctx.beginPath();
+        vctx.arc((b.cx + b.oax * ampK) * kx, (b.cy + b.oay * ampK) * ky, hs * 0.72, 0, TAU);
+        vctx.stroke();
+      }
+      vctx.restore();
+    }
+    if (P.sizeMode === 'each' && selI >= 0 && selI < blobs.length) {
+      const b = blobs[selI];
+      const kx = view.width / FW, ky = view.height / FH;
+      const r = blobR(b) * kx;
+      vctx.save();
+      vctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      vctx.lineWidth = Math.max(1.5, view.width / 700);
+      vctx.setLineDash([6, 6]);
+      vctx.beginPath();
+      vctx.arc(b.x * kx, b.y * ky, r + 6 * kx, 0, Math.PI * 2);
+      vctx.stroke();
+      vctx.restore();
+    }
+  }
+
+  // fixed-timestep clock driven by wall time: physics always advances at
+  // 60 steps per real second regardless of display refresh rate (120/144Hz
+  // screens previously ran the sim fast, cutting loop recordings short)
+  const STEP = 1 / 60;
+  let acc = 0, lastTS = 0;
+  function loop(ts) {
+    if (ts !== undefined) {
+      if (lastTS) acc += Math.min((ts - lastTS) / 1000, 0.25);
+      lastTS = ts;
+      while (acc >= STEP) {
+        step();
+        acc -= STEP;
+        if (recorder && recorder.state === 'recording' && recStopT < Infinity && t >= recStopT - STEP / 2) {
+          recorder.stop();
+        }
+      }
+    }
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- pointer ----------
+  function toField(e) {
+    const r = view.getBoundingClientRect();
+    return [ (e.clientX - r.left) / r.width * FW,
+             (e.clientY - r.top)  / r.height * FH ];
+  }
+  view.addEventListener('pointerdown', e => {
+    const [fx, fy] = toField(e);
+    if (P.loop && P.showPaths) {
+      const ampK = orbitAmpK(), HR = 9;
+      let hit = null;
+      for (let i = 0; i < blobs.length && !hit; i++) {
+        const b = blobs[i];
+        if (b.cx === undefined) continue;
+        if (Math.hypot(fx - (b.cx + b.oax * ampK), fy - (b.cy + b.oay * ampK)) < HR)
+          hit = { i, mode: 'corner' };
+      }
+      for (let i = 0; i < blobs.length && !hit; i++) {
+        const b = blobs[i];
+        if (b.cx === undefined) continue;
+        if (Math.hypot(fx - b.cx, fy - b.cy) < HR) hit = { i, mode: 'center' };
+      }
+      if (hit) {
+        dragH = hit;
+        selI = hit.i; syncSizeSlider(); updateOrbitRows();
+        view.classList.add('dragging');
+        view.setPointerCapture(e.pointerId);
+        return;
+      }
+    }
+    const R0 = baseR();
+    let best = -1, bd = 1e9;
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      const d = Math.hypot(fx - b.x, fy - b.y);
+      if (d < R0 * b.rv * b.scale * 1.6 && d < bd) { bd = d; best = i; }
+    }
+    if (best >= 0) {
+      dragI = best; dragPX = fx; dragPY = fy;
+      view.classList.add('dragging');
+      view.setPointerCapture(e.pointerId);
+      document.getElementById('hint').style.opacity = 0;
+      if (P.sizeMode === 'each' || P.loop) { selI = best; syncSizeSlider(); updateOrbitRows(); }
+    } else if (P.sizeMode === 'each' || P.loop) {
+      selI = -1; syncSizeSlider(); updateOrbitRows();
+    }
+  });
+  view.addEventListener('pointermove', e => {
+    if (dragH) {
+      const [fx, fy] = toField(e);
+      const b = blobs[dragH.i];
+      if (dragH.mode === 'center') {
+        b.cx = fx; b.cy = fy;
+      } else {
+        const ampK = orbitAmpK();
+        b.oax = Math.max(2, Math.abs(fx - b.cx)) / ampK;
+        b.oay = Math.max(2, Math.abs(fy - b.cy)) / ampK;
+      }
+      return;
+    }
+    if (dragI < 0) return;
+    const [fx, fy] = toField(e);
+    const b = blobs[dragI];
+    b.vx = (fx - dragPX); b.vy = (fy - dragPY);
+    b.x = fx; b.y = fy;
+    dragPX = fx; dragPY = fy;
+  });
+  const endDrag = () => {
+    if (dragI >= 0 && P.frozen) { blobs[dragI].vx = 0; blobs[dragI].vy = 0; }
+    dragI = -1; dragH = null; view.classList.remove('dragging');
+  };
+  view.addEventListener('pointerup', endDrag);
+  view.addEventListener('pointercancel', endDrag);
+
+  // ---------- export: shared download ----------
+  function download(blob, name) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function busy(btn, label, fn) {
+    const old = btn.textContent;
+    btn.textContent = label;
+    btn.disabled = true;
+    setTimeout(() => {
+      try { fn(); } finally { btn.textContent = old; btn.disabled = false; }
+    }, 30);
+  }
+
+  // ---------- export: PNG (high-res re-render) ----------
+  function exportPNG() {
+    const EW = 1600, EH = Math.round(EW * FH / FW);
+    const c = document.createElement('canvas');
+    c.width = EW; c.height = EH;
+    const cx = c.getContext('2d');
+    const id = cx.createImageData(EW, EH);
+    renderField(id.data, EW, EH, P.transparent);
+    cx.putImageData(id, 0, 0);
+    c.toBlob(b => download(b, 'blob-lab.png'), 'image/png');
+  }
+
+  // ---------- export: SVG (marching squares -> vector paths) ----------
+  function marchingSquares(grid, gw, gh, level, stepSz) {
+    const segs = [];
+    const gx = (i) => i * stepSz, gy = (j) => j * stepSz;
+    for (let j = 0; j < gh - 1; j++) {
+      for (let i = 0; i < gw - 1; i++) {
+        const v0 = grid[j * gw + i],       v1 = grid[j * gw + i + 1];
+        const v3 = grid[(j+1) * gw + i],   v2 = grid[(j+1) * gw + i + 1];
+        const idx = (v0 > level ? 8 : 0) | (v1 > level ? 4 : 0) |
+                    (v2 > level ? 2 : 0) | (v3 > level ? 1 : 0);
+        if (idx === 0 || idx === 15) continue;
+        const x = gx(i), y = gy(j), s = stepSz;
+        const T = [x + s * ((level - v0) / (v1 - v0)), y];
+        const R = [x + s, y + s * ((level - v1) / (v2 - v1))];
+        const B = [x + s * ((level - v3) / (v2 - v3)), y + s];
+        const L = [x, y + s * ((level - v0) / (v3 - v0))];
+        switch (idx) {
+          case 1:  segs.push([L, B]); break;
+          case 2:  segs.push([B, R]); break;
+          case 3:  segs.push([L, R]); break;
+          case 4:  segs.push([T, R]); break;
+          case 5:  segs.push([T, R], [L, B]); break;
+          case 6:  segs.push([T, B]); break;
+          case 7:  segs.push([L, T]); break;
+          case 8:  segs.push([L, T]); break;
+          case 9:  segs.push([T, B]); break;
+          case 10: segs.push([L, T], [B, R]); break;
+          case 11: segs.push([T, R]); break;
+          case 12: segs.push([L, R]); break;
+          case 13: segs.push([B, R]); break;
+          case 14: segs.push([L, B]); break;
+        }
+      }
+    }
+    // chain segments into closed polylines
+    const key = pt => Math.round(pt[0] * 64) + ':' + Math.round(pt[1] * 64);
+    const adj = new Map();
+    const used = new Uint8Array(segs.length);
+    segs.forEach((sg, i) => {
+      for (const pt of sg) {
+        const k = key(pt);
+        if (!adj.has(k)) adj.set(k, []);
+        adj.get(k).push(i);
+      }
+    });
+    const polys = [];
+    for (let i = 0; i < segs.length; i++) {
+      if (used[i]) continue;
+      used[i] = 1;
+      const pts = [segs[i][0], segs[i][1]];
+      let guard = segs.length * 2;
+      while (guard-- > 0) {
+        const cur = pts[pts.length - 1];
+        const k = key(cur);
+        if (pts.length > 2 && k === key(pts[0])) break;
+        const cands = adj.get(k) || [];
+        let found = -1;
+        for (const ci of cands) { if (!used[ci]) { found = ci; break; } }
+        if (found < 0) break;
+        used[found] = 1;
+        const sg = segs[found];
+        pts.push(key(sg[0]) === k ? sg[1] : sg[0]);
+      }
+      if (pts.length > 2) polys.push(pts);
+    }
+    return polys;
+  }
+
+  function rgbHex(c) {
+    return '#' + c.map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+  }
+
+  function exportSVG() {
+    const shp = shapeParams();
+    const pre = precompute(shp);
+    const S = 2;                                  // samples per buffer px
+    const gw = FW * S + 1, gh = FH * S + 1, stepSz = 1 / S;
+    const grid = new Float32Array(gw * gh);
+    for (let j = 0; j < gh; j++)
+      for (let i = 0; i < gw; i++)
+        grid[j * gw + i] = fieldAt(i * stepSz, j * stepSz, pre, shp);
+
+    // levels & colors per fill mode
+    let layers;
+    if (P.mode === 'glow') {
+      const tmp = [0, 0, 0];
+      layers = [1, 1.8, 3, 5].map(l => {
+        glowMix(l, tmp);
+        return { level: l, fill: rgbHex([...tmp]) };
+      });
+    } else if (P.mode === 'sweep') {
+      layers = [{ level: 1, fill: 'url(#sweep)' }];
+    } else {
+      layers = [{ level: 1, fill: rgbHex(P.core) }];
+    }
+
+    const fmt = v => (Math.round(v * 100) / 100);
+    let pathsOut = '';
+    for (const ly of layers) {
+      const polys = marchingSquares(grid, gw, gh, ly.level, stepSz);
+      if (!polys.length) continue;
+      let d = '';
+      for (const pts of polys) {
+        d += 'M' + fmt(pts[0][0]) + ' ' + fmt(pts[0][1]);
+        for (let i = 1; i < pts.length; i++)
+          d += 'L' + fmt(pts[i][0]) + ' ' + fmt(pts[i][1]);
+        d += 'Z';
+      }
+      pathsOut += '<path d="' + d + '" fill="' + ly.fill + '" fill-rule="evenodd"/>\n';
+    }
+
+    const blurStd = P.soft * 2.5;
+    const useBlur = blurStd > 0.15;
+    const defs =
+      (P.mode === 'sweep'
+        ? '<linearGradient id="sweep" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2="' + FH + '">' +
+          '<stop offset="0" stop-color="' + rgbHex(P.core) + '"/>' +
+          '<stop offset="1" stop-color="' + rgbHex(P.edge) + '"/></linearGradient>'
+        : '') +
+      (useBlur
+        ? '<filter id="soft" x="-25%" y="-25%" width="150%" height="150%">' +
+          '<feGaussianBlur stdDeviation="' + fmt(blurStd) + '"/></filter>'
+        : '');
+
+    const svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + FW + ' ' + FH + '" ' +
+      'width="' + FW * 6 + '" height="' + FH * 6 + '">\n' +
+      (defs ? '<defs>' + defs + '</defs>\n' : '') +
+      (P.transparent ? '' :
+        '<rect width="' + FW + '" height="' + FH + '" fill="' + rgbHex(P.bg) + '"/>\n') +
+      '<g' + (useBlur ? ' filter="url(#soft)"' : '') + '>\n' + pathsOut + '</g>\n' +
+      '</svg>';
+
+    download(new Blob([svg], { type: 'image/svg+xml' }), 'blob-lab.svg');
+  }
+
+  // ---------- video recording ----------
+  let recorder = null, recChunks = [], recT0 = 0, recTimer = null, recStopT = Infinity;
+  function bestMime() {
+    if (!window.MediaRecorder) return '';
+    const cands = ['video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+    for (const m of cands) if (MediaRecorder.isTypeSupported(m)) return m;
+    return '';
+  }
+  function startRec() {
+    if (!window.MediaRecorder || !view.captureStream) {
+      alert('Video recording is not supported in this browser.');
+      return;
+    }
+    const mime = bestMime();
+    const stream = view.captureStream(60);
+    recorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 8000000 } : undefined);
+    recChunks = [];
+    recorder.ondataavailable = e => { if (e.data && e.data.size) recChunks.push(e.data); };
+    recorder.onstop = () => {
+      const type = (recorder && recorder.mimeType) || 'video/webm';
+      const ext = type.indexOf('mp4') >= 0 ? 'mp4' : 'webm';
+      download(new Blob(recChunks, { type }), 'blob-lab.' + ext);
+      recorder = null;
+      recStopT = Infinity;
+      clearInterval(recTimer);
+      const btn = document.getElementById('ex-rec');
+      btn.textContent = 'REC';
+      btn.classList.remove('rec');
+    };
+    recorder.start(250);
+    recT0 = Date.now();
+    recStopT = P.loop ? t + P.loopDur : Infinity;   // in loop mode: exactly one cycle
+    const btn = document.getElementById('ex-rec');
+    btn.classList.add('rec');
+    const tick = () => {
+      const sec = Math.floor((Date.now() - recT0) / 1000);
+      btn.textContent = (P.loop ? '\u25a0 loop ' : '\u25a0 ') +
+        Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+    };
+    tick();
+    recTimer = setInterval(tick, 500);
+  }
+
+  // ---------- controls ----------
+  const $ = id => document.getElementById(id);
+  const hex2rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+
+  function shapeLabel(s) {
+    if (s < 0.06) return 'circle';
+    if (s < 0.5)  return 'oval ' + Math.round(s * 200) + '%';
+    if (s < 0.56) return 'oval';
+    return P.points + '-point ' + Math.round((s * 2 - 1) * 100) + '%';
+  }
+  const bind = (id, fn) => $(id).addEventListener('input', e => fn(e.target.value));
+
+  bind('count',  v => { P.count = +v; syncCount(); $('v-count').textContent = v; });
+  function syncSizeSlider() {
+    const lab = $('v-size'), sl = $('size');
+    if (P.sizeMode === 'all') {
+      sl.disabled = false;
+      sl.value = Math.round(P.size * 100);
+      lab.textContent = Math.round(P.size * 100) + '%';
+    } else if (selI >= 0) {
+      sl.disabled = false;
+      sl.value = Math.max(0, Math.min(100, Math.round(blobs[selI].scale * 50)));
+      lab.textContent = 'blob ' + (selI + 1) + ' \u00b7 ' + Math.round(blobs[selI].scale * 100) + '%';
+    } else {
+      sl.disabled = true;
+      lab.textContent = 'select a blob';
+    }
+  }
+  bind('size', v => {
+    if (P.sizeMode === 'all') {
+      P.size = v / 100;
+      $('v-size').textContent = v + '%';
+    } else if (selI >= 0) {
+      blobs[selI].scale = Math.max(0.15, v / 50);
+      $('v-size').textContent = 'blob ' + (selI + 1) + ' \u00b7 ' + Math.round(blobs[selI].scale * 100) + '%';
+    }
+  });
+  bind('shape',  v => { P.shape = v / 100; $('v-shape').textContent = shapeLabel(P.shape); });
+  bind('points', v => { P.points = +v; $('v-points').textContent = v;
+                        $('v-shape').textContent = shapeLabel(P.shape); });
+  bind('soft',   v => { P.soft = v / 100;
+                        $('v-soft').textContent = (v < 15 ? 'hard ' : v > 60 ? 'very soft ' : 'soft ') + v + '%'; });
+  bind('goo',    v => { P.goo = v / 100; $('v-goo').textContent = v + '%'; });
+  bind('attract',v => { P.attract = v / 100; $('v-attract').textContent = v + '%'; });
+  bind('loopdur',v => { P.loopDur = +v; $('v-loopdur').textContent = v + 's'; });
+  function updateOrbitRows() {
+    const show = P.loop && selI >= 0 && selI < blobs.length;
+    $('orbit-rows').style.display = show ? 'block' : 'none';
+    if (show) {
+      const b = blobs[selI];
+      if (b.cx === undefined) initOrbit(b);
+      $('ofx').value = b.ofx; $('v-ofx').textContent = b.ofx;
+      $('ofy').value = b.ofy; $('v-ofy').textContent = b.ofy;
+    }
+  }
+  bind('ofx', v => { if (selI >= 0) { blobs[selI].ofx = +v; $('v-ofx').textContent = v; } });
+  bind('ofy', v => { if (selI >= 0) { blobs[selI].ofy = +v; $('v-ofy').textContent = v; } });
+  bind('c-core', v => P.core = hex2rgb(v));
+  bind('c-edge', v => P.edge = hex2rgb(v));
+  bind('c-bg',   v => P.bg   = hex2rgb(v));
+
+  function segInit(groupId, cb) {
+    document.querySelectorAll('#' + groupId + ' button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#' + groupId + ' button').forEach(b => b.classList.remove('on'));
+        btn.classList.add('on');
+        cb(btn.dataset);
+      });
+    });
+  }
+  segInit('mode',   d => P.mode = d.m);
+  segInit('sizemode', d => {
+    P.sizeMode = d.s;
+    $('sel-hint').style.display = (d.s === 'each') ? 'block' : 'none';
+    if (d.s === 'all') selI = -1;
+    syncSizeSlider();
+  });
+  segInit('motion', d => {
+    P.frozen = (d.f === 'frozen');
+    const entering = (d.f === 'loop') && !P.loop;
+    P.loop = (d.f === 'loop');
+    $('loop-note').style.display = P.loop ? 'block' : 'none';
+    $('loopdur-row').style.display = P.loop ? 'block' : 'none';
+    $('paths-row').style.display = P.loop ? 'block' : 'none';
+    if (entering) blobs.forEach(initOrbit);
+    updateOrbitRows();
+  });
+  segInit('pathsmode', d => { P.showPaths = (d.p === 'show'); });
+  segInit('bgmode', d => {
+    P.transparent = (d.b === 'clear');
+    stage.classList.toggle('checker', P.transparent);
+  });
+
+  $('scatter').addEventListener('click', scatter);
+  $('ex-png').addEventListener('click', () => busy($('ex-png'), '\u2026', exportPNG));
+  $('ex-svg').addEventListener('click', () => busy($('ex-svg'), '\u2026', exportSVG));
+  $('ex-rec').addEventListener('click', () => { if (recorder) recorder.stop(); else startRec(); });
+
+  window.addEventListener('resize', resize);
+  loop();
+})();
+</script>
+</body>
+</html>
